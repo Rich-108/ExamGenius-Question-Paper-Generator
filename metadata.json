@@ -1,0 +1,5 @@
+{
+  "name": "ExamGenius: Question Paper Generator",
+  "description": "A smart system for generating university question papers with balanced difficulty and chapter coverage.",
+  "requestFramePermissions": []
+}
