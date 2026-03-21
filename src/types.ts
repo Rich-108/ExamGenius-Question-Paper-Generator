@@ -30,6 +30,17 @@ export interface Paper {
   questions?: Question[];
 }
 
+export interface AIPaperTemplate {
+  id?: number;
+  name: string;
+  course_name_code?: string;
+  date_duration?: string;
+  test_type?: string;
+  syllabus_text?: string;
+  model_paper_text?: string;
+  created_at?: string;
+}
+
 export interface DifficultyProfile {
   Easy: number;
   Medium: number;
@@ -39,4 +50,15 @@ export interface DifficultyProfile {
 export interface DifficultyTemplate extends DifficultyProfile {
   id: number;
   name: string;
+}
+
+export interface AIPaper {
+  id?: number;
+  course_name_code: string;
+  date_duration: string;
+  test_type: string;
+  content: string;
+  model_paper_text?: string;
+  is_draft?: boolean;
+  created_at?: string;
 }

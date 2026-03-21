@@ -51,7 +51,42 @@ db.exec(`
     medium INTEGER NOT NULL,
     hard INTEGER NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS ai_papers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_name_code TEXT NOT NULL,
+    date_duration TEXT NOT NULL,
+    test_type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    model_paper_text TEXT,
+    is_draft INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  
+  CREATE TABLE IF NOT EXISTS ai_paper_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    course_name_code TEXT,
+    date_duration TEXT,
+    test_type TEXT,
+    syllabus_text TEXT,
+    model_paper_text TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
+
+// Add columns if they don't exist (for existing databases)
+try {
+  db.prepare("ALTER TABLE ai_papers ADD COLUMN model_paper_text TEXT").run();
+} catch (e) {
+  // Column already exists
+}
+
+try {
+  db.prepare("ALTER TABLE ai_papers ADD COLUMN is_draft INTEGER DEFAULT 0").run();
+} catch (e) {
+  // Column already exists
+}
 
 // Seed Data
 const seedData = () => {
@@ -265,17 +300,17 @@ async function startServer() {
 
   // Difficulty Templates
   app.get("/api/templates", (req, res) => {
-    const templates = db.prepare("SELECT * FROM difficulty_templates").all();
+    const templates = db.prepare("SELECT id, name, easy as Easy, medium as Medium, hard as Hard FROM difficulty_templates").all();
     res.json(templates);
   });
 
   app.post("/api/templates", (req, res) => {
-    const { name, easy, medium, hard } = req.body;
+    const { name, Easy, Medium, Hard } = req.body;
     try {
       const info = db.prepare(
         "INSERT INTO difficulty_templates (name, easy, medium, hard) VALUES (?, ?, ?, ?)"
-      ).run(name, easy, medium, hard);
-      res.json({ id: info.lastInsertRowid, name, easy, medium, hard });
+      ).run(name, Easy, Medium, Hard);
+      res.json({ id: info.lastInsertRowid, name, Easy, Medium, Hard });
     } catch (e) {
       res.status(400).json({ error: "Template name already exists" });
     }
@@ -299,6 +334,77 @@ async function startServer() {
     setTimeout(() => {
       res.json({ success: true, message: `Question paper has been sent to ${email}` });
     }, 1000);
+  });
+
+  app.post("/api/ai-papers/:id/email", (req, res) => {
+    const { email } = req.body;
+    const paper = db.prepare("SELECT course_name_code FROM ai_papers WHERE id = ?").get(req.params.id) as any;
+    
+    if (!paper) return res.status(404).json({ error: "AI Paper not found" });
+
+    console.log(`Sending AI paper "${paper.course_name_code}" to ${email}`);
+    
+    setTimeout(() => {
+      res.json({ success: true, message: `AI Question paper has been sent to ${email}` });
+    }, 1000);
+  });
+
+  // AI Papers
+  app.get("/api/ai-papers", (req, res) => {
+    const papers = db.prepare("SELECT * FROM ai_papers ORDER BY created_at DESC").all();
+    res.json(papers);
+  });
+
+  app.post("/api/ai-papers", (req, res) => {
+    const { course_name_code, date_duration, test_type, content, model_paper_text, is_draft } = req.body;
+    const info = db.prepare(
+      "INSERT INTO ai_papers (course_name_code, date_duration, test_type, content, model_paper_text, is_draft) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(course_name_code, date_duration, test_type, content, model_paper_text, is_draft ? 1 : 0);
+    res.json({ id: info.lastInsertRowid, course_name_code, date_duration, test_type, content, model_paper_text, is_draft: !!is_draft });
+  });
+
+  app.get("/api/ai-papers/:id", (req, res) => {
+    const paper = db.prepare("SELECT * FROM ai_papers WHERE id = ?").get(req.params.id);
+    if (!paper) return res.status(404).json({ error: "Not found" });
+    res.json(paper);
+  });
+
+  app.put("/api/ai-papers/:id", (req, res) => {
+    const { content, is_draft } = req.body;
+    if (is_draft !== undefined) {
+      db.prepare("UPDATE ai_papers SET content = ?, is_draft = ? WHERE id = ?").run(content, is_draft ? 1 : 0, req.params.id);
+    } else {
+      db.prepare("UPDATE ai_papers SET content = ? WHERE id = ?").run(content, req.params.id);
+    }
+    res.json({ success: true });
+  });
+
+  app.delete("/api/ai-papers/:id", (req, res) => {
+    db.prepare("DELETE FROM ai_papers WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  });
+
+  // AI Paper Templates
+  app.get("/api/ai-paper-templates", (req, res) => {
+    const templates = db.prepare("SELECT * FROM ai_paper_templates ORDER BY created_at DESC").all();
+    res.json(templates);
+  });
+
+  app.post("/api/ai-paper-templates", (req, res) => {
+    const { name, course_name_code, date_duration, test_type, syllabus_text, model_paper_text } = req.body;
+    try {
+      const info = db.prepare(
+        "INSERT INTO ai_paper_templates (name, course_name_code, date_duration, test_type, syllabus_text, model_paper_text) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run(name, course_name_code, date_duration, test_type, syllabus_text, model_paper_text);
+      res.json({ id: info.lastInsertRowid, name, course_name_code, date_duration, test_type, syllabus_text, model_paper_text });
+    } catch (e) {
+      res.status(400).json({ error: "Template name already exists" });
+    }
+  });
+
+  app.delete("/api/ai-paper-templates/:id", (req, res) => {
+    db.prepare("DELETE FROM ai_paper_templates WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
   });
 
   // Vite middleware for development
